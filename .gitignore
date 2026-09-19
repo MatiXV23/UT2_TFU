@@ -1,0 +1,6 @@
+.env
+.medicion_*
+.venv-pdf/
+.md2pdf.*
+node_modules/
+.DS_Store

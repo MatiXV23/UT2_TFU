@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TFU UT2 — Consola de pruebas</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>&#9881;</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>TFU UT2 &mdash; Consola de pruebas</h1>
+    <div class="sub">Tácticas de arquitectura · múltiples copias de cómputo · autenticar actores · limitar el acceso</div>
+  </div>
+  <div class="estado">
+    <span><span class="punto" id="pt-gw"></span> gateway</span>
+    <span><span class="punto" id="pt-sesion"></span> <span id="txt-sesion">sin sesión</span></span>
+  </div>
+</header>
+
+<nav>
+  <button data-vista="sesion" class="activa">Sesión</button>
+  <button data-vista="recursos">Recursos</button>
+  <button data-vista="rendimiento">Rendimiento</button>
+  <button data-vista="seguridad">Seguridad</button>
+  <button data-vista="manual">Petición manual</button>
+</nav>
+
+<main>
+  <div id="vista"></div>
+
+  <aside>
+    <div class="cab">
+      Registro de peticiones
+      <span class="n" id="log-n">0</span>
+      <button class="b sec" id="btn-limpiar" style="padding:4px 10px;font-size:11.5px">Limpiar</button>
+    </div>
+    <div id="registro"></div>
+  </aside>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>

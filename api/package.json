@@ -1,0 +1,12 @@
+{
+  "name": "ut2-tfu-api",
+  "version": "1.0.0",
+  "description": "API REST de demostracion de tacticas de arquitectura - TFU UT2",
+  "main": "src/server.js",
+  "private": true,
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {}
+}

@@ -1,0 +1,157 @@
+# =============================================================================
+#  TFU UT2 - Tacticas de Arquitectura
+#  Combinacion elegida:
+#    * RENDIMIENTO -> "Mantener multiples copias de computo"
+#    * SEGURIDAD (resistir ataques) -> "Autenticar actores" + "Limitar el acceso"
+#
+#  Topologia:
+#         host:8080
+#             |
+#        [ gateway nginx ]  <-- unico componente publicado
+#             |  (red interna, sin salida a internet)
+#     +-------+-------+-------- [ ui ]   <-- consola grafica de pruebas
+#    api1   api2   api3      <-- 3 replicas identicas y stateless
+#     +-------+-------+
+#             |
+#          [ redis ]         <-- estado compartido (contadores, bloqueos)
+# =============================================================================
+
+name: ut2-tfu
+
+x-api-base: &api-base
+  # La imagen se construye UNA sola vez (servicio api1) y las tres replicas
+  # comparten exactamente el mismo artefacto -> "multiples copias de computo".
+  image: ut2-tfu/api:1.0.0
+  pull_policy: never
+  restart: unless-stopped
+  # "Limitar el acceso" / minimo privilegio del contenedor
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  tmpfs:
+    - /tmp
+  networks:
+    - interna
+  depends_on:
+    redis:
+      condition: service_healthy
+  healthcheck:
+    test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+    interval: 5s
+    timeout: 3s
+    retries: 5
+    start_period: 5s
+  # Recursos acotados: hace visible la ganancia de escalar horizontalmente
+  deploy:
+    resources:
+      limits:
+        cpus: "0.50"
+        memory: 192M
+
+x-api-env: &api-env
+  NODE_ENV: production
+  PORT: "3000"
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  JWT_SECRET: ${JWT_SECRET:-clave-demo-tfu-ut2-cambiar-en-produccion}
+  JWT_TTL: "900"
+  MAX_INTENTOS_LOGIN: "5"
+  VENTANA_BLOQUEO_SEG: "60"
+
+services:
+
+  # ---------------------------------------------------------------- GATEWAY
+  gateway:
+    image: nginx:1.27-alpine
+    container_name: ut2-gateway
+    restart: unless-stopped
+    ports:
+      # UNICO puerto publicado del sistema. Ni las replicas ni Redis son
+      # alcanzables desde el host -> tactica "limitar el acceso".
+      - "${PUERTO_HOST:-8080}:80"
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./gateway/proxy_comun.conf:/etc/nginx/proxy_comun.conf:ro
+    networks:
+      - publica
+      - interna
+    depends_on:
+      api1: { condition: service_healthy }
+      api2: { condition: service_healthy }
+      api3: { condition: service_healthy }
+      ui:   { condition: service_healthy }
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/nginx-health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ------------------------------------------- REPLICAS (multiples copias)
+  api1:
+    <<: *api-base
+    build:
+      context: ./api
+    container_name: ut2-api1
+    environment:
+      <<: *api-env
+      INSTANCE_ID: api-1
+
+  api2:
+    <<: *api-base
+    container_name: ut2-api2
+    environment:
+      <<: *api-env
+      INSTANCE_ID: api-2
+
+  api3:
+    <<: *api-base
+    container_name: ut2-api3
+    environment:
+      <<: *api-env
+      INSTANCE_ID: api-3
+
+  # ------------------------------- INTERFAZ GRAFICA DE PRUEBAS (subproyecto)
+  ui:
+    build:
+      context: ./ui
+    image: ut2-tfu/ui:1.0.0
+    container_name: ut2-ui
+    restart: unless-stopped
+    networks:
+      - interna
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ------------------------------------------------- ESTADO COMPARTIDO
+  redis:
+    image: redis:7-alpine
+    container_name: ut2-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
+    networks:
+      - interna
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+
+networks:
+  publica:
+    driver: bridge
+  interna:
+    driver: bridge
+    # Red sin ruta hacia el exterior: las replicas y Redis no pueden iniciar
+    # conexiones a internet ni ser alcanzadas desde fuera del compose.
+    internal: true
